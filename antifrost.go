@@ -81,7 +81,9 @@ func start(command string, args ...string) {
 	for {
 		select {
 		case <-ticker.C:
-			if !ticked {
+			if cmd.ProcessState.Exited() {
+				os.Exit(0)
+			} else if !ticked {
 				ticked = true
 			} else {
 				cmd.Process.Kill()
@@ -91,13 +93,15 @@ func start(command string, args ...string) {
 			ticked = false
 		case <-quit:
 			ticker.Stop()
-			cmd.Process.Signal(syscall.SIGTERM)
-			go func() {
-				time.Sleep(10 * time.Second)
-				cmd.Process.Kill()
-				os.Exit(1)
-			}()
-			cmd.Wait()
+			if !cmd.ProcessState.Exited() {
+				cmd.Process.Signal(syscall.SIGTERM)
+				go func() {
+					time.Sleep(10 * time.Second)
+					cmd.Process.Kill()
+					os.Exit(1)
+				}()
+				cmd.Wait()
+			}
 			os.Exit(0)
 		}
 	}
