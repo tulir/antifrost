@@ -16,7 +16,7 @@
 package main
 
 import (
-	"bufio"
+	"fmt"
 	flag "maunium.net/go/mauflag"
 	"os"
 	"os/exec"
@@ -34,6 +34,7 @@ var tickerTime = flag.Make().Key("t", "time").Usage("The ticker interval in seco
 var tickerLimit = flag.Make().Key("l", "limit").Usage("The number of silent ticks to allow before restarting").Default("1").Int()
 
 var quit = make(chan bool)
+var output = make(chan bool, 1)
 
 func main() {
 	flag.MakeHelpFlag()
@@ -56,6 +57,8 @@ func main() {
 		quit <- true
 	}()
 
+	handleOutput()
+
 	for {
 		start(flag.Arg(0), flag.Args()[1:]...)
 	}
@@ -64,58 +67,105 @@ func main() {
 func start(command string, args ...string) {
 	cmd := exec.Command(command, args...)
 
-	if *pipeStdout {
-		cmd.Stdout = os.Stdout
-	}
-	if *pipeStderr {
-		cmd.Stderr = os.Stderr
-	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	if *pipeStdin {
 		cmd.Stdin = os.Stdin
 	}
 
-	cmd.Start()
-
-	stdout := make(chan bool, 1)
-	go func() {
-		r, _ := cmd.StdoutPipe()
-		reader := bufio.NewReader(r)
-		for {
-			reader.ReadString('\n')
-			stdout <- true
-		}
-	}()
+	go cmd.Run()
 
 	ticker := time.NewTicker(time.Duration(*tickerTime) * time.Second)
 	ticked := 0
 	for {
 		select {
 		case <-ticker.C:
-			if cmd.ProcessState.Exited() {
+			if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
 				if *autorestart {
+					fmt.Println("[Antifrost] Process exited! Restarting...")
 					return
 				}
+				fmt.Println("[Antifrost] Process exited! Exiting...")
 				os.Exit(0)
 			} else if ticked < *tickerLimit {
 				ticked++
 			} else {
-				cmd.Process.Kill()
+				if cmd.Process != nil {
+					fmt.Println("[Antifrost] Process doesn't seem to be responding! Restarting...")
+					cmd.Process.Kill()
+				}
 				return
 			}
-		case <-stdout:
+		case <-output:
 			ticked = 0
 		case <-quit:
+			fmt.Print("[Antifrost] Interrupted! ")
 			ticker.Stop()
-			if !cmd.ProcessState.Exited() {
+			if cmd.ProcessState != nil && !cmd.ProcessState.Exited() {
+				fmt.Println("Process still running! Sending SIGTERM...")
 				cmd.Process.Signal(syscall.SIGTERM)
 				go func() {
 					time.Sleep(10 * time.Second)
+					fmt.Println("[Antifrost] Process didn't exit! Sending SIGKILL and exiting...")
 					cmd.Process.Kill()
 					os.Exit(1)
 				}()
 				cmd.Wait()
+				fmt.Println("[Antifrost] Process exited. Exiting...")
+			} else {
+				fmt.Print("\n")
 			}
 			os.Exit(0)
 		}
 	}
+}
+
+func handleOutput() {
+	stdout := os.Stdout
+	ro, wo, _ := os.Pipe()
+	os.Stdout = wo
+
+	go func() {
+		if *pipeStdout {
+			for {
+				var rd = make([]byte, 128)
+				n, _ := ro.Read(rd)
+				if n > 0 {
+					stdout.Write(rd)
+					output <- true
+				}
+			}
+		} else {
+			for {
+				n, _ := ro.Read(make([]byte, 128))
+				if n > 0 {
+					output <- true
+				}
+			}
+		}
+	}()
+
+	stderr := os.Stderr
+	re, we, _ := os.Pipe()
+	os.Stderr = we
+
+	go func() {
+		if *pipeStderr {
+			for {
+				var rd = make([]byte, 128)
+				n, _ := re.Read(rd)
+				if n > 0 {
+					stderr.Write(rd)
+					output <- true
+				}
+			}
+		} else {
+			for {
+				n, _ := re.Read(make([]byte, 128))
+				if n > 0 {
+					output <- true
+				}
+			}
+		}
+	}()
 }
