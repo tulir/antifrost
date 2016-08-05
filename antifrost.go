@@ -37,9 +37,17 @@ var quit = make(chan bool)
 
 func main() {
 	flag.MakeHelpFlag()
-	flag.SetHelpTitles("antifrost - A wrapper to restarts programs if they freeze", "antifrost [-o]")
+	flag.SetHelpTitles("antifrost - A wrapper to restarts programs if they freeze", "antifrost [-e] [-i] [-l] [-o] [-r] [-t] -- <command> [<args>...]")
 	flag.Parse()
-	flag.CheckHelpFlag()
+	if flag.CheckHelpFlag() {
+		return
+	}
+
+	if flag.NArg() == 0 {
+		os.Stderr.WriteString("Error: You must specify the command to run\n\n")
+		flag.PrintHelp()
+		return
+	}
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
