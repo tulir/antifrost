@@ -40,7 +40,7 @@ var output = make(chan bool, 1)
 
 func main() {
 	flag.MakeHelpFlag()
-	flag.SetHelpTitles("antifrost - A wrapper to restarts programs if they freeze", "antifrost [-o] [-e] [-s=NUM] [-i] [-r] [-t=INTERVAL] [-l=TICKS] -- <command> [<args>...]")
+	flag.SetHelpTitles("antifrost 1.0 - A wrapper to restarts programs if they freeze", "antifrost [-o] [-e] [-s=NUM] [-i] [-r] [-t=INTERVAL] [-l=TICKS] -- <command> [<args>...]")
 	flag.Parse()
 	if flag.CheckHelpFlag() {
 		return
