@@ -31,6 +31,7 @@ var pipeStdin = flag.Make().Key("i", "stdin").Usage("Pipe stin to child").Defaul
 var autorestart = flag.Make().Key("r", "restart").Usage("Restart automatically if the program crashes").Default("false").Bool()
 
 var tickerTime = flag.Make().Key("t", "time").Usage("The ticker interval in seconds").Default("30").Int64()
+var tickerLimit = flag.Make().Key("l", "limit").Usage("The number of silent ticks to allow before restarting").Default("1").Int()
 
 var quit = make(chan bool)
 
@@ -78,7 +79,7 @@ func start(command string, args ...string) {
 	}()
 
 	ticker := time.NewTicker(time.Duration(*tickerTime) * time.Second)
-	ticked := false
+	ticked := 0
 	for {
 		select {
 		case <-ticker.C:
@@ -87,14 +88,14 @@ func start(command string, args ...string) {
 					return
 				}
 				os.Exit(0)
-			} else if !ticked {
-				ticked = true
+			} else if ticked < *tickerLimit {
+				ticked++
 			} else {
 				cmd.Process.Kill()
 				return
 			}
 		case <-stdout:
-			ticked = false
+			ticked = 0
 		case <-quit:
 			ticker.Stop()
 			if !cmd.ProcessState.Exited() {
