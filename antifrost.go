@@ -28,6 +28,7 @@ import (
 var pipeStdout = flag.Make().Key("o", "stdout").Usage("Pipe stdout from child").Default("true").Bool()
 var pipeStderr = flag.Make().Key("e", "stderr").Usage("Pipe stderr from child").Default("true").Bool()
 var pipeStdin = flag.Make().Key("i", "stdin").Usage("Pipe stin to child").Default("true").Bool()
+var autorestart = flag.Make().Key("r", "restart").Usage("Restart automatically if the program crashes").Default("false").Bool()
 
 var tickerTime = flag.Make().Key("t", "time").Usage("The ticker interval in seconds").Default("30").Int64()
 
@@ -82,6 +83,9 @@ func start(command string, args ...string) {
 		select {
 		case <-ticker.C:
 			if cmd.ProcessState.Exited() {
+				if *autorestart {
+					return
+				}
 				os.Exit(0)
 			} else if !ticked {
 				ticked = true
