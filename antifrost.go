@@ -15,6 +15,90 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 package main
 
-func main() {
+import (
+	"bufio"
+	flag "maunium.net/go/mauflag"
+	"os"
+	"os/exec"
+	"os/signal"
+	"syscall"
+	"time"
+)
 
+var pipeStdout = flag.Make().Key("o", "stdout").Usage("Pipe stdout from child").Default("true").Bool()
+var pipeStderr = flag.Make().Key("e", "stderr").Usage("Pipe stderr from child").Default("true").Bool()
+var pipeStdin = flag.Make().Key("i", "stdin").Usage("Pipe stin to child").Default("true").Bool()
+
+var tickerTime = flag.Make().Key("t", "time").Usage("The ticker interval in seconds").Default("30").Int64()
+
+var quit = make(chan bool)
+
+func main() {
+	flag.MakeHelpFlag()
+	flag.SetHelpTitles("antifrost - A wrapper to restarts programs if they freeze", "antifrost [-o]")
+	flag.Parse()
+	flag.CheckHelpFlag()
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		quit <- true
+	}()
+
+	for {
+		start(flag.Arg(0), flag.Args()[1:]...)
+	}
+}
+
+func start(command string, args ...string) {
+	cmd := exec.Command(command, args...)
+
+	if *pipeStdout {
+		cmd.Stdout = os.Stdout
+	}
+	if *pipeStderr {
+		cmd.Stderr = os.Stderr
+	}
+	if *pipeStdin {
+		cmd.Stdin = os.Stdin
+	}
+
+	cmd.Start()
+
+	stdout := make(chan bool, 1)
+	go func() {
+		r, _ := cmd.StdoutPipe()
+		reader := bufio.NewReader(r)
+		for {
+			reader.ReadString('\n')
+			stdout <- true
+		}
+	}()
+
+	ticker := time.NewTicker(time.Duration(*tickerTime) * time.Second)
+	ticked := false
+	for {
+		select {
+		case <-ticker.C:
+			if !ticked {
+				ticked = true
+			} else {
+				cmd.Process.Kill()
+				return
+			}
+		case <-stdout:
+			ticked = false
+		case <-quit:
+			ticker.Stop()
+			cmd.Process.Signal(syscall.SIGTERM)
+			go func() {
+				time.Sleep(10 * time.Second)
+				cmd.Process.Kill()
+				os.Exit(1)
+			}()
+			cmd.Wait()
+			os.Exit(0)
+		}
+	}
 }
