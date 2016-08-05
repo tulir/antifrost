@@ -27,7 +27,9 @@ import (
 
 var pipeStdout = flag.Make().Key("o", "stdout").Usage("Pipe stdout from child").Default("true").Bool()
 var pipeStderr = flag.Make().Key("e", "stderr").Usage("Pipe stderr from child").Default("true").Bool()
+var pipeSize = flag.Make().Key("s", "pipe-size").Usage("The maximum number of bytes to pipe at once (stdout/err)").Default("1024").Int()
 var pipeStdin = flag.Make().Key("i", "stdin").Usage("Pipe stin to child").Default("true").Bool()
+
 var autorestart = flag.Make().Key("r", "restart").Usage("Restart automatically if the program crashes").Default("false").Bool()
 
 var tickerTime = flag.Make().Key("t", "time").Usage("The ticker interval in seconds").Default("30").Int64()
@@ -38,7 +40,7 @@ var output = make(chan bool, 1)
 
 func main() {
 	flag.MakeHelpFlag()
-	flag.SetHelpTitles("antifrost - A wrapper to restarts programs if they freeze", "antifrost [-e] [-i] [-l] [-o] [-r] [-t] -- <command> [<args>...]")
+	flag.SetHelpTitles("antifrost - A wrapper to restarts programs if they freeze", "antifrost [-o] [-e] [-s=NUM] [-i] [-r] [-t=INTERVAL] [-l=TICKS] -- <command> [<args>...]")
 	flag.Parse()
 	if flag.CheckHelpFlag() {
 		return
@@ -128,7 +130,7 @@ func handleOutput() {
 	go func() {
 		if *pipeStdout {
 			for {
-				var rd = make([]byte, 128)
+				var rd = make([]byte, *pipeSize)
 				n, _ := ro.Read(rd)
 				if n > 0 {
 					stdout.Write(rd)
@@ -137,7 +139,7 @@ func handleOutput() {
 			}
 		} else {
 			for {
-				n, _ := ro.Read(make([]byte, 128))
+				n, _ := ro.Read(make([]byte, *pipeSize))
 				if n > 0 {
 					output <- true
 				}
@@ -152,7 +154,7 @@ func handleOutput() {
 	go func() {
 		if *pipeStderr {
 			for {
-				var rd = make([]byte, 128)
+				var rd = make([]byte, *pipeSize)
 				n, _ := re.Read(rd)
 				if n > 0 {
 					stderr.Write(rd)
@@ -161,7 +163,7 @@ func handleOutput() {
 			}
 		} else {
 			for {
-				n, _ := re.Read(make([]byte, 128))
+				n, _ := re.Read(make([]byte, *pipeSize))
 				if n > 0 {
 					output <- true
 				}
