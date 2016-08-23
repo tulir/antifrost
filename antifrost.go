@@ -25,15 +25,15 @@ import (
 	"time"
 )
 
-var pipeStdout = flag.Make().Key("o", "stdout").Usage("Pipe stdout from child").Default("true").Bool()
-var pipeStderr = flag.Make().Key("e", "stderr").Usage("Pipe stderr from child").Default("true").Bool()
-var pipeSize = flag.Make().Key("s", "pipe-size").Usage("The maximum number of bytes to pipe at once (stdout/err)").Default("1024").Int()
-var pipeStdin = flag.Make().Key("i", "stdin").Usage("Pipe stin to child").Default("true").Bool()
+var pipeStdout = flag.MakeFull("o", "stdout", "Pipe stdout from child", "true").Bool()
+var pipeStderr = flag.MakeFull("e", "stderr", "Pipe stderr from child", "true").Bool()
+var pipeSize = flag.MakeFull("s", "pipe-size", "The maximum number of bytes to pipe at once (stdout/err)", "1024").Int()
+var pipeStdin = flag.MakeFull("i", "stdin", "Pipe stin to child", "true").Bool()
 
-var autorestart = flag.Make().Key("r", "restart").Usage("Restart automatically if the program crashes").Default("false").Bool()
+var autorestart = flag.MakeFull("r", "restart", "Restart automatically if the program crashes", "false").Bool()
 
-var tickerTime = flag.Make().Key("t", "time").Usage("The ticker interval in seconds").Default("30").Int64()
-var tickerLimit = flag.Make().Key("l", "limit").Usage("The number of silent ticks to allow before restarting").Default("1").Int()
+var tickerTime = flag.MakeFull("t", "time", "The ticker interval in seconds", "30").Int64()
+var tickerLimit = flag.MakeFull("l", "limit", "The number of silent ticks to allow before restarting", "1").Int()
 
 var quit = make(chan bool)
 var output = make(chan bool, 1)
